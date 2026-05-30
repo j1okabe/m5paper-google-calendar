@@ -12,4 +12,5 @@ public:
     static const char *GOOGLE_APP_CLIENT_SECRET;
 
     static const char *GOOGLE_CALENDAR_ID;
+    static const char *GOOGLE_CALENDAR_ID_2;
 };

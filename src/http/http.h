@@ -1,6 +1,6 @@
 #pragma once
 
-#include <M5Stack.h>
+#include <Arduino.h>
 
 // single key value pair
 class KeyValue {
@@ -34,5 +34,8 @@ class MyHTTPClient {
 public:
     String get(const char *url, const KeyValues *headers, const KeyValues *data);
     String post(const char *url, const KeyValues *headers, const KeyValues *data);
+    String lastError() const { return _lastError; };
 
+private:
+    String _lastError;
 };

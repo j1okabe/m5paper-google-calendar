@@ -21,7 +21,7 @@ DynamicJsonDocument GoogleAuthorization::getAccessToken(const char *refreshToken
 
     String res = client.post(TOKEN_ENDPOINT, &headers, &data);
 
-    DynamicJsonDocument doc(1000);
+    DynamicJsonDocument doc(2000);
     deserializeJson(doc, res);
     return doc;
 }

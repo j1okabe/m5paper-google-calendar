@@ -36,6 +36,7 @@ public:
     bool add(GoogleCalendarEvent &event);
     GoogleCalendarEvent *get (int pos) const;
     int length() const {return _length;};
+    void sortByStartTime();
     
 private:
     int _length;
@@ -54,5 +55,7 @@ public:
 class GoogleCalendar {
 public:
     static GoogleCalendarEventList *getEvents(const char *accessToken, const char *calendarId, struct tm *start, struct tm *end);
+    static GoogleCalendarEventList *getEvents(const char *accessToken, const char *calendarIds[], int calendarIdCount, struct tm *start, struct tm *end);
     static std::vector<GoogleCalendarListItem> getCalendars(const char *accessToken);
+    static String lastFetchError();
 };

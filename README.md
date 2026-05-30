@@ -13,7 +13,7 @@ You need to create Google Calendar App and OAuth
 1. Go to https://console.cloud.google.com/apis/dashboard .
 2. search Google Calendar and enable it.
 3. Go to https://console.cloud.google.com/apis/credentials/oauthclient .
-4. Create your OAuth client ID
+4. Create your OAuth client ID as a `Desktop app`.
 5. Copy Client ID and Client Secret.
 
 Now you have Client ID and Client Secret.
@@ -27,15 +27,18 @@ So you can now create your refresh token.
 ```
 $ bash tools/get-access-token.sh
 ...
-please access below url
+Open this URL in your browser:
 https://accounts.google.com/o/oauth2/v2/auth?response_type=code&...
 
-please input your code :<input your code here>
-your refresh token
+Waiting for OAuth redirect on http://127.0.0.1:8080/ ...
+refresh token
 <refresh token>
 ```
 
 You've got refresh token.
+
+The token tool uses the loopback redirect `http://127.0.0.1:8080/`.
+Use a Desktop app OAuth client for this flow.
 
 ## setup your wifi and calendar configs
 
@@ -55,15 +58,12 @@ Copy `src\config.cpp.sample` to `src\config.cpp` and write your settings.
 Use VSCode and Platform-IO plugin.
 
 - board
-    - m5stack-fire
+    - m5stack_paper
 - dependent libraries
-    - M5EPD
-    - M5Stack
+    - M5GFX
+    - M5Unified
     - ArduinoJson
 
 # show wide characters
 
-You need to install a SD card to your TF slot.
-Your SD card must have `font.ttf` file in the root directory.
-
-ex) [IPAex fornt](https://moji.or.jp/ipafont/)
+This project uses M5GFX's built-in Japanese efont.

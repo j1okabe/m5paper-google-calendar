@@ -15,3 +15,4 @@ const char *config::GOOGLE_APP_CLIENT_SECRET="";
 
 // your calendar id (maybe mail address)
 const char *config::GOOGLE_CALENDAR_ID="";
+const char *config::GOOGLE_CALENDAR_ID_2="";

@@ -4,21 +4,41 @@
 #include <Arduino.h>
 
 bool MYWIFI::connect(const char *ssid, const char *password, int timeout) {
-    WiFi.begin(ssid, password);
+    WiFi.persistent(false);
+    WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false);
 
-    long start = millis();
-    while (WiFi.status() != WL_CONNECTED) {
+    for (int attempt = 1; attempt <= 2; attempt++) {
+        Serial.printf("connecting to WiFi: %s (attempt %d)\n", ssid, attempt);
+        WiFi.disconnect(true, true);
         delay(500);
-        Serial.print(".");
-        long elapsed = millis() - start;
-        if (elapsed / 1000 > timeout) {
-            return false;
+        WiFi.begin(ssid, password);
+
+        const unsigned long start = millis();
+        while (WiFi.status() != WL_CONNECTED) {
+            delay(500);
+            Serial.print(".");
+            const unsigned long elapsed = millis() - start;
+            if (elapsed / 1000 > (unsigned long)timeout) {
+                Serial.printf("\nWiFi connect timeout, status=%d\n", WiFi.status());
+                break;
+            }
         }
+
+        if (WiFi.status() == WL_CONNECTED) {
+            Serial.printf("\nconnected: ip=%s rssi=%d\n",
+                          WiFi.localIP().toString().c_str(),
+                          WiFi.RSSI());
+            return true;
+        }
+
+        delay(1000);
     }
-    Serial.print("connected");
-    return true;
+
+    WiFi.disconnect(true, true);
+    return false;
 }
 
 void MYWIFI::disconnect() {
-    WiFi.disconnect(true);
+    WiFi.disconnect(true, true);
 }

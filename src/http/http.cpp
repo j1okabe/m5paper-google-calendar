@@ -3,16 +3,23 @@
 #include <string.h>
 
 String urlEncode(const char *val) ;
+bool shouldRetryHttpGet(int code);
+
+namespace
+{
+    const int HTTP_GET_MAX_ATTEMPTS = 3;
+    const uint16_t HTTP_TIMEOUT_MS = 15000;
+}
 
 KeyValue::KeyValue(const char *key, const char *val) {
     int keyLen = strlen(key);
     int valLen = strlen(val);
     _key = (char *)malloc(keyLen + 1);
+    _val = (char *)malloc(valLen + 1);
     if (_key == NULL || _val == NULL) {
         Serial.print("malloc failed");
         return;
     }
-    _val = (char *)malloc(valLen + 1);
     strncpy(_key, key, keyLen + 1);
     strncpy(_val, val, valLen + 1);
 }
@@ -79,6 +86,7 @@ KeyValue *KeyValues::get(int pos) const {
 //////////////////////
 String MyHTTPClient::get(const char *url, const KeyValues *headers, const KeyValues *data) {
     HTTPClient client;
+    _lastError = "";
     String params = "";
     if (data != NULL) {
         params  = "?";
@@ -91,28 +99,59 @@ String MyHTTPClient::get(const char *url, const KeyValues *headers, const KeyVal
         }
     }
 
-    client.begin(url + params);
+    const String requestUrl = String(url) + params;
 
-    if (headers != NULL) {
-        for (int i = 0 ; i < headers->length() ; i++) {
-            KeyValue *kv = headers->get(i);
-            client.addHeader(kv->key(), kv->val());
+    for (int attempt = 1; attempt <= HTTP_GET_MAX_ATTEMPTS; attempt++) {
+        client.begin(requestUrl);
+        client.setReuse(false);
+        client.setTimeout(HTTP_TIMEOUT_MS);
+
+        if (headers != NULL) {
+            for (int i = 0 ; i < headers->length() ; i++) {
+                KeyValue *kv = headers->get(i);
+                client.addHeader(kv->key(), kv->val());
+            }
         }
-    }
 
-    int code = client.GET();
-    if (code == HTTP_CODE_OK) {
-        return client.getString();
-    }
-    else {
-        Serial.print("http get error");
-        Serial.print(client.getString());
+        int code = client.GET();
+        String response = client.getString();
+        String errorMessage = client.errorToString(code);
+        client.end();
+        if (code == HTTP_CODE_OK) {
+            return response;
+        }
+
+        Serial.print("http get error: attempt=");
+        Serial.print(attempt);
+        Serial.print("/");
+        Serial.print(HTTP_GET_MAX_ATTEMPTS);
+        Serial.print(", code=");
+        Serial.print(code);
+        Serial.print(", error=");
+        Serial.println(errorMessage);
+        Serial.print("url=");
+        Serial.println(requestUrl);
+        Serial.print("response=");
+        Serial.println(response);
+
+        _lastError = "HTTP " + String(code) + " " + errorMessage;
+        if (response.length() > 0) {
+            _lastError += " ";
+            _lastError += response.substring(0, 80);
+        }
+
+        if (!shouldRetryHttpGet(code) || attempt == HTTP_GET_MAX_ATTEMPTS) {
+            break;
+        }
+
+        delay(500 * attempt);
     }
 
     return "";
 }
 String MyHTTPClient::post(const char *url, const KeyValues *headers, const KeyValues *data) {
     HTTPClient client;
+    _lastError = "";
     //Serial.println(url);
     client.begin(url);
 
@@ -136,15 +175,17 @@ String MyHTTPClient::post(const char *url, const KeyValues *headers, const KeyVa
     }
 
     int code = client.POST(body);
+    String response = client.getString();
     if (code == HTTP_CODE_OK) {
-        return client.getString();
+        return response;
     }
     else {
         Serial.print("http post error");
-        Serial.print(client.getString());
+        Serial.print(response);
+        _lastError = "HTTP " + String(code) + " " + response.substring(0, 80);
     }
 
-    return "";
+    return response;
 }
 
 
@@ -176,4 +217,14 @@ String urlEncode(const char *val) {
 		}
     }
     return buf;
+}
+
+bool shouldRetryHttpGet(int code) {
+    return code < 0 ||
+           code == HTTP_CODE_REQUEST_TIMEOUT ||
+           code == HTTP_CODE_TOO_MANY_REQUESTS ||
+           code == HTTP_CODE_INTERNAL_SERVER_ERROR ||
+           code == HTTP_CODE_BAD_GATEWAY ||
+           code == HTTP_CODE_SERVICE_UNAVAILABLE ||
+           code == HTTP_CODE_GATEWAY_TIMEOUT;
 }

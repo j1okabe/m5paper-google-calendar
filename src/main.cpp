@@ -25,13 +25,18 @@ void generateCalendarStartEnd(struct tm *start, struct tm *end);
 void drawWrappedText(const String &text, int32_t x, int32_t y, int32_t lineHeight, int maxCharsPerLine, int maxLines);
 bool syncTime();
 bool shouldSyncTime();
+bool isUsbPowered();
+void sleepUntilNextSync();
 void onTimeSynced(struct timeval *tv);
 
 M5Canvas canvas(&M5.Display);
 volatile bool timeSynced = false;
-
+int32_t batt = 0;
 namespace
 {
+    const uint64_t MICROSECONDS_PER_SECOND = 1000000ULL;
+    const int16_t USB_POWERED_VBUS_MV = 4400;
+    const uint8_t M5PAPER_S3_USB_DET_PIN = 5;
     const int32_t EVENT_MARGIN_TOP = 12;
     const int32_t EVENT_TIME_X = 10;
     const int32_t EVENT_TITLE_X = 30;
@@ -96,7 +101,7 @@ void setup()
     }
 
     // draw status bar
-    StatusBar::draw(&canvas, displayWidth);
+    StatusBar::draw(&canvas, displayWidth, &batt);
     // get access token
     Serial.print("before auth");
     DynamicJsonDocument doc = GoogleAuthorization::getAccessToken(config::GOOGLE_REFRESH_TOKEN);
@@ -209,19 +214,73 @@ void setup()
 void loop()
 {
     // need delay because drawing canvas is too slow
-    delay(2001);
+    delay(1000);
+    if(batt < 4){
+        // show low battery warning at bottom of screen
+        canvas.drawString("Battery low, please charge", 10, M5.Display.height() - 40);
+        canvas.pushSprite(0, 0);
+        delay(5000);
+        // power off to prevent battery damage
+        M5.Power.powerOff();
+    }else{
+        // sleep until next sync
+        sleepUntilNextSync();
+    }
+    // sleepUntilNextSync();
+}
+
+bool isUsbPowered()
+{
+    int16_t vbusVoltage = M5.Power.getVBUSVoltage();
+    if (vbusVoltage >= USB_POWERED_VBUS_MV)
+    {
+        return true;
+    }
+
+    if (M5.Power.isCharging() == m5::Power_Class::is_charging)
+    {
+        return true;
+    }
+
+    if (M5.getBoard() == m5::board_t::board_M5PaperS3)
+    {
+        pinMode(M5PAPER_S3_USB_DET_PIN, INPUT);
+        return digitalRead(M5PAPER_S3_USB_DET_PIN) == HIGH;
+    }
+
+    return false;
+}
+
+void sleepUntilNextSync()
+{
+    const bool usbPowered = isUsbPowered();
+    Serial.printf("usb powered: %s\n", usbPowered ? "yes" : "no");
+
+    if (usbPowered)
+    {
+        Serial.println("USB powered: use ESP32 deep sleep timer for wakeup");
+        Serial.flush();
+        M5.Power.deepSleep(SyncIntervalSec * MICROSECONDS_PER_SECOND, false);
+        return;
+    }
+
+    Serial.println("Battery powered: use M5.Power.timerSleep for wakeup");
+
     // restart after SyncIntervalSec
     // 2時間後のtimeを計算してtimerSleepする
-    
-    time_t now = time(nullptr);  
+    time_t now = time(nullptr);
+    if (now <= 0)
+    {
+        M5.Power.timerSleep(SyncIntervalSec);
+        return;
+    }
+
     time_t nextSyncTime = now + SyncIntervalSec;
     m5::rtc_time_t wakeTime;
     wakeTime.hours = (nextSyncTime / 3600) % 24;
     wakeTime.minutes = (nextSyncTime / 60) % 60;
-    wakeTime.seconds = nextSyncTime % 60; 
+    wakeTime.seconds = nextSyncTime % 60;
     M5.Power.timerSleep(wakeTime);
-
-    // M5.Power.timerSleep(SyncIntervalSec);
 }
 
 void generateCalendarStartEnd(struct tm *start, struct tm *end)

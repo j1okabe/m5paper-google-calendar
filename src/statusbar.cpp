@@ -9,7 +9,7 @@ namespace
     const char *WEEKDAYS[] = {"日", "月", "火", "水", "木", "金", "土"};
 }
 
-void StatusBar::draw(M5Canvas *canvas, int32_t width) {
+void StatusBar::draw(M5Canvas *canvas, int32_t width, int32_t *batt) {
 
     // bar
     canvas->drawFastHLine(0, StatusBar::height() - 1, width, TFT_BLACK);
@@ -30,6 +30,9 @@ void StatusBar::draw(M5Canvas *canvas, int32_t width) {
             vol = 4350;
         }
         batteryLevel = (vol - 3300) * 100 / (4350 - 3300);
+    }
+    if (batt != nullptr) {
+        *batt = batteryLevel;
     }
 
     const int32_t margin_top = 6;

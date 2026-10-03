@@ -41,4 +41,5 @@ bool MYWIFI::connect(const char *ssid, const char *password, int timeout) {
 
 void MYWIFI::disconnect() {
     WiFi.disconnect(true, true);
+    WiFi.mode(WIFI_OFF);
 }

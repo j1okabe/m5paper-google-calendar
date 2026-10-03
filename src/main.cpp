@@ -25,18 +25,16 @@ void generateCalendarStartEnd(struct tm *start, struct tm *end);
 void drawWrappedText(const String &text, int32_t x, int32_t y, int32_t lineHeight, int maxCharsPerLine, int maxLines);
 bool syncTime();
 bool shouldSyncTime();
-bool isUsbPowered();
-void sleepUntilNextSync();
+void refreshCalendar();
+void sleepUntilNextRefresh();
 void onTimeSynced(struct timeval *tv);
 
 M5Canvas canvas(&M5.Display);
 volatile bool timeSynced = false;
-int32_t batt = 0;
+bool canvasReady = false;
 namespace
 {
     const uint64_t MICROSECONDS_PER_SECOND = 1000000ULL;
-    const int16_t USB_POWERED_VBUS_MV = 4400;
-    const uint8_t M5PAPER_S3_USB_DET_PIN = 5;
     const int32_t EVENT_MARGIN_TOP = 12;
     const int32_t EVENT_TIME_X = 10;
     const int32_t EVENT_TITLE_X = 30;
@@ -74,6 +72,25 @@ void setup()
     canvas.setTextSize(1);
     canvas.setTextColor(TFT_BLACK, TFT_WHITE);
     canvas.setTextDatum(top_left);
+    canvasReady = true;
+
+    setenv("TZ", TIME_ZONE, 1);
+    tzset();
+    M5.Rtc.setSystemTimeFromRtc();
+    tzset();
+}
+
+void refreshCalendar()
+{
+    const int32_t displayWidth = M5.Display.width();
+    const int32_t displayHeight = M5.Display.height();
+
+    M5.Display.wakeup();
+    canvas.fillSprite(TFT_WHITE);
+    canvas.setFont(FNT28);
+    canvas.setTextSize(1);
+    canvas.setTextColor(TFT_BLACK, TFT_WHITE);
+    canvas.setTextDatum(top_left);
 
     bool connected = MYWIFI::connect(config::WIFI_SSID, config::WIFI_PASSWORD, 10);
     if (!connected)
@@ -82,11 +99,6 @@ void setup()
         canvas.pushSprite(0, 0);
         return;
     }
-    setenv("TZ", TIME_ZONE, 1);
-    tzset();
-    M5.Rtc.setSystemTimeFromRtc();
-    tzset();
-
     // 1日に一回の更新を行う。JSTの0時から1:59、またはRTC時刻が無効な場合だけNTP同期する。
     if (shouldSyncTime())
     {
@@ -95,13 +107,12 @@ void setup()
         {
             canvas.drawString("time sync failed", 0, displayHeight / 2);
             canvas.pushSprite(0, 0);
-            MYWIFI::disconnect();
             return;
         }
     }
 
     // draw status bar
-    StatusBar::draw(&canvas, displayWidth, &batt);
+    StatusBar::draw(&canvas, displayWidth);
     // get access token
     Serial.print("before auth");
     DynamicJsonDocument doc = GoogleAuthorization::getAccessToken(config::GOOGLE_REFRESH_TOKEN);
@@ -116,7 +127,6 @@ void setup()
         Serial.println(errorDescription);
         canvas.drawString("google auth failed", EVENT_TIME_X, StatusBar::height() + EVENT_MARGIN_TOP);
         canvas.pushSprite(0, 0);
-        MYWIFI::disconnect();
         return;
     }
     Serial.println("access token received");
@@ -149,7 +159,6 @@ void setup()
                         30,
                         6);
         canvas.pushSprite(0, 0);
-        MYWIFI::disconnect();
         return;
     }
 
@@ -205,7 +214,6 @@ void setup()
     delete events;
 
     canvas.pushSprite(0, 0);
-    MYWIFI::disconnect();
     Serial.println(" now time ");
     int utime = time(NULL);
     Serial.println(String("") + utime);
@@ -213,74 +221,21 @@ void setup()
 
 void loop()
 {
-    // need delay because drawing canvas is too slow
-    delay(1000);
-    if(batt < 4){
-        // show low battery warning at bottom of screen
-        canvas.drawString("Battery low, please charge", 10, M5.Display.height() - 40);
-        canvas.pushSprite(0, 0);
-        delay(5000);
-        // power off to prevent battery damage
-        M5.Power.powerOff();
-    }else{
-        // sleep until next sync
-        sleepUntilNextSync();
+    if (canvasReady)
+    {
+        refreshCalendar();
+        MYWIFI::disconnect();
+        M5.Display.waitDisplay();
+        M5.Display.sleep();
     }
-    // sleepUntilNextSync();
+    sleepUntilNextRefresh();
 }
 
-bool isUsbPowered()
+void sleepUntilNextRefresh()
 {
-    int16_t vbusVoltage = M5.Power.getVBUSVoltage();
-    if (vbusVoltage >= USB_POWERED_VBUS_MV)
-    {
-        return true;
-    }
-
-    if (M5.Power.isCharging() == m5::Power_Class::is_charging)
-    {
-        return true;
-    }
-
-    if (M5.getBoard() == m5::board_t::board_M5PaperS3)
-    {
-        pinMode(M5PAPER_S3_USB_DET_PIN, INPUT);
-        return digitalRead(M5PAPER_S3_USB_DET_PIN) == HIGH;
-    }
-
-    return false;
-}
-
-void sleepUntilNextSync()
-{
-    const bool usbPowered = isUsbPowered();
-    Serial.printf("usb powered: %s\n", usbPowered ? "yes" : "no");
-
-    if (usbPowered)
-    {
-        Serial.println("USB powered: use ESP32 deep sleep timer for wakeup");
-        Serial.flush();
-        M5.Power.deepSleep(SyncIntervalSec * MICROSECONDS_PER_SECOND, false);
-        return;
-    }
-
-    Serial.println("Battery powered: use M5.Power.timerSleep for wakeup");
-
-    // restart after SyncIntervalSec
-    // 2時間後のtimeを計算してtimerSleepする
-    time_t now = time(nullptr);
-    if (now <= 0)
-    {
-        M5.Power.timerSleep(SyncIntervalSec);
-        return;
-    }
-
-    time_t nextSyncTime = now + SyncIntervalSec;
-    m5::rtc_time_t wakeTime;
-    wakeTime.hours = (nextSyncTime / 3600) % 24;
-    wakeTime.minutes = (nextSyncTime / 60) % 60;
-    wakeTime.seconds = nextSyncTime % 60;
-    M5.Power.timerSleep(wakeTime);
+    Serial.println("entering light sleep until next refresh");
+    Serial.flush();
+    M5.Power.lightSleep(SyncIntervalSec * MICROSECONDS_PER_SECOND, false);
 }
 
 void generateCalendarStartEnd(struct tm *start, struct tm *end)

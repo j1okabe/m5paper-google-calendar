@@ -19,27 +19,27 @@ void StatusBar::draw(M5Canvas *canvas, int32_t width, int32_t *batt) {
 
     // battery percentage calculation from
     // https://github.com/m5stack/M5Paper_FactoryTest/blob/ef8d1ff94490a9364479231d6ba7e343d9adaa06/src/frame/frame_main.cpp#L272
-    int32_t batteryLevel = M5.Power.getBatteryLevel();
-    int32_t vol = M5.Power.getBatteryVoltage();
+    // int32_t batteryLevel = M5.Power.getBatteryLevel();
+    // int32_t vol = M5.Power.getBatteryVoltage();
 
-    if (batteryLevel < 0) {
-        if (vol < 3300) {
-            vol = 3300;
-        }
-        else if (vol > 4350) {
-            vol = 4350;
-        }
-        batteryLevel = (vol - 3300) * 100 / (4350 - 3300);
-    }
-    if (batt != nullptr) {
-        *batt = batteryLevel;
-    }
+    // if (batteryLevel < 0) {
+    //     if (vol < 3300) {
+    //         vol = 3300;
+    //     }
+    //     else if (vol > 4350) {
+    //         vol = 4350;
+    //     }
+    //     batteryLevel = (vol - 3300) * 100 / (4350 - 3300);
+    // }
+    // if (batt != nullptr) {
+    //     *batt = batteryLevel;
+    // }
 
     const int32_t margin_top = 6;
-    const int32_t battery_width = 170;
-    char battString[32];
-    snprintf(battString, sizeof(battString), "batt: %ld %%", batteryLevel);
-    canvas->drawString(battString, width - battery_width, margin_top);
+    // const int32_t battery_width = 170;
+    // char battString[32];
+    // snprintf(battString, sizeof(battString), "batt: %ld %%", batteryLevel);
+    // canvas->drawString(battString, width - battery_width, margin_top);
 
     // time string (RTC/system time stays UTC; only the displayed string is JST)
     time_t now = time(nullptr);
